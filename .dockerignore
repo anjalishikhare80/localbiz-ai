@@ -1,0 +1,10 @@
+venv/
+.git/
+__pycache__/
+*.pyc
+.env
+media/
+media_test/
+staticfiles/
+ml_artifacts/
+ml_artifacts_test/

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2"><h3 class="m-0">{{ title }}</h3>
+  <div class="d-flex gap-2 align-items-center">
+    {% if needs_dates %}<form class="d-flex gap-1" method="get"><input type="date" class="form-control form-control-sm" name="start" value="{{ start|date:'Y-m-d' }}"><input type="date" class="form-control form-control-sm" name="end" value="{{ end|date:'Y-m-d' }}"><button class="btn btn-sm btn-outline-secondary">Apply</button></form>{% endif %}
+    <a class="btn btn-sm btn-primary" href="?{% if needs_dates %}start={{ start|date:'Y-m-d' }}&end={{ end|date:'Y-m-d' }}&{% endif %}format=csv">Export CSV</a>
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'reports:index' %}">All reports</a></div></div>
+<div class="card"><div class="table-responsive"><table class="table table-sm table-hover mb-0">
+  <thead class="table-light"><tr>{% for h in headers %}<th>{{ h }}</th>{% endfor %}</tr></thead>
+  {% for r in rows %}<tr>{% for c in r %}<td>{{ c }}</td>{% endfor %}</tr>{% empty %}<tr><td colspan="{{ headers|length }}" class="text-center text-muted py-4">No data for this period.</td></tr>{% endfor %}
+</table></div></div>
+{% endblock %}

@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}AI Insights{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+  <div><h3 class="m-0">AI Insights</h3>
+  <div class="small text-muted">Predictions are estimates learned from this business's own sales history. Accuracy is shown honestly below each model.</div></div>
+  {% if 'ml.train' in user_perms %}<form method="post" action="{% url 'ml:train' %}">{% csrf_token %}<button class="btn btn-primary">Retrain models now</button></form>{% endif %}
+</div>
+<ul class="nav nav-tabs" role="tablist">
+  <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#t-demand">Demand forecast</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-sales">Sales forecast</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-seg">Customer segments</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-anom">Unusual transactions</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-assoc">Bought together</button></li>
+</ul>
+<div class="tab-content pt-3">
+
+<div class="tab-pane fade show active" id="t-demand">
+  {% if not demand_version %}<div class="alert alert-info">No demand forecast yet. It needs roughly 3 months of sales history. Use “Retrain models now” once there is enough data.</div>
+  {% else %}
+  <div class="card p-3 mb-3 small"><b>Model:</b> {{ demand_version.algorithm }} (v{{ demand_version.version }}, trained {{ demand_version.trained_at|date:"d M Y H:i" }}) ·
+    <b>forecast horizon:</b> {{ demand_version.metrics.horizon_days }} days · <b>tested on the last {{ demand_version.metrics.holdout_days }} days of data</b>
+    <table class="table table-sm mt-2 mb-0" style="max-width:640px"><thead><tr><th>Method</th><th>7-day total: MAE</th><th>7-day total: WAPE</th><th>Daily MAE</th><th>Daily RMSE</th><th></th></tr></thead>
+    {% for name, m in demand_version.metrics.candidates.items %}<tr {% if name == demand_version.metrics.selected %}class="table-success"{% endif %}><td>{{ name }}</td><td>{{ m.block_mae }}</td><td>{{ m.block_wape }}</td><td>{{ m.mae }}</td><td>{{ m.rmse }}</td><td>{% if name == demand_version.metrics.selected %}selected{% endif %}</td></tr>{% endfor %}</table>
+    <div class="text-muted mt-1">Lower is better. The method is chosen by its error on 7-day totals (what you actually order against). WAPE = total error ÷ total units sold. Daily demand of slow products is mostly random, so daily errors look large. MAPE is not used because daily demand contains many zero-sale days. A simple baseline is selected whenever the ML model does not beat it.</div></div>
+  <div class="card"><div class="table-responsive"><table class="table table-sm table-hover mb-0">
+    <thead class="table-light"><tr><th>Product</th><th class="text-end">Stock</th><th class="text-end">Predicted demand (7d)</th><th class="text-end">Days of cover</th><th>Status</th><th class="text-end">Suggested order</th></tr></thead>
+    {% for f in demand %}<tr><td><a href="{% url 'catalog:product_detail' f.product_id %}">{{ f.product.name }}</a></td><td class="text-end">{{ f.current_stock }}</td>
+      <td class="text-end">{% if f.status == 'INSUFFICIENT_DATA' %}—{% else %}{{ f.predicted_demand }}{% endif %}</td><td class="text-end">{{ f.days_of_cover|default_if_none:"—" }}</td>
+      <td>{% if f.status == 'SHORTAGE_RISK' %}<span class="badge bg-danger">Potential shortage</span>{% elif f.status == 'SUFFICIENT' %}<span class="badge bg-success">Sufficient</span>{% else %}<span class="badge bg-secondary">Not enough history</span>{% endif %}</td>
+      <td class="text-end">{% if f.suggested_reorder %}{{ f.suggested_reorder }}{% endif %}</td></tr>{% endfor %}
+  </table></div></div>
+  {% endif %}
+</div>
+
+<div class="tab-pane fade" id="t-sales">
+  {% if not sales_version %}<div class="alert alert-info">No sales forecast yet (needs roughly 3 months of data).</div>
+  {% else %}
+  <div class="card p-3 mb-3"><canvas id="forecastChart" height="90"></canvas></div>
+  <div class="card p-3 small"><b>Model:</b> {{ sales_version.algorithm }} (v{{ sales_version.version }}) · tested on the last {{ sales_version.metrics.holdout_days }} days ·
+    {% with m=sales_version.metrics.selected %}{% for name, v in sales_version.metrics.candidates.items %}{% if name == m %}MAE {{ v.mae }}, RMSE {{ v.rmse }}, WAPE {{ v.wape }}{% endif %}{% endfor %}{% endwith %}
+    <div class="text-muted">{{ sales_version.metrics.interval_note }}</div></div>
+  {% endif %}
+</div>
+
+<div class="tab-pane fade" id="t-seg">
+  {% if not segment_version %}<div class="alert alert-info">Segmentation needs at least 10 customers with purchases.</div>
+  {% else %}
+  <div class="row g-2 mb-3">{% for name, n in segment_counts.items %}<div class="col-6 col-md-2"><div class="card kpi-card p-2 text-center"><div class="small text-muted">{{ name }}</div><div class="fs-4">{{ n }}</div></div></div>{% endfor %}</div>
+  <div class="card p-3 mb-3 small"><b>How segments are decided:</b> customers are scored 1–5 on Recency, Frequency and Monetary value (quantile ranks). Rules: Inactive = no purchase in 90+ days; At Risk = low recency score but regular buyer; High Value = high spend and frequent and recent; Loyal = very frequent and recent; Regular / Occasional = the rest.
+    {% if kmeans %}<hr class="my-2"><b>K-Means check:</b> k = {{ kmeans.k }} clusters chosen by silhouette score ({{ kmeans.silhouette }}).
+    <table class="table table-sm mt-2 mb-0" style="max-width:640px"><thead><tr><th>Cluster</th><th>Size</th><th>Avg days since purchase</th><th>Avg orders</th><th>Avg spend</th></tr></thead>
+    {% for c in kmeans.clusters %}<tr><td>{{ c.cluster }}</td><td>{{ c.size }}</td><td>{{ c.avg_recency_days }}</td><td>{{ c.avg_frequency }}</td><td>{{ c.avg_monetary }}</td></tr>{% endfor %}</table>{% endif %}</div>
+  <div class="card"><div class="table-responsive"><table class="table table-sm table-hover mb-0"><thead class="table-light"><tr><th>Customer</th><th>Segment</th><th class="text-end">Days since last</th><th class="text-end">Orders</th><th class="text-end">Spent</th><th>R/F/M</th></tr></thead>
+    {% for s in segments %}<tr><td><a href="{% url 'customers:detail' s.customer_id %}">{{ s.customer.name }}</a></td><td>{{ s.segment }}</td><td class="text-end">{{ s.recency_days }}</td><td class="text-end">{{ s.frequency }}</td><td class="text-end">{{ s.monetary }}</td><td>{{ s.r_score }}/{{ s.f_score }}/{{ s.m_score }}</td></tr>{% endfor %}</table></div></div>
+  {% endif %}
+</div>
+
+<div class="tab-pane fade" id="t-anom">
+  {% if not anomaly_version %}<div class="alert alert-info">Needs at least 100 completed sales.</div>
+  {% else %}
+  <div class="alert alert-warning small">These are <b>potentially unusual</b> transactions picked by an unsupervised model (Isolation Forest). Most have an ordinary explanation (a bulk order, a festival rush). Please review; nothing here is a fraud verdict.</div>
+  <div class="card"><div class="table-responsive"><table class="table table-sm mb-0"><thead class="table-light"><tr><th>Invoice</th><th>Date</th><th class="text-end">Total</th><th>Why it stands out</th><th></th></tr></thead>
+    {% for a in anomalies %}<tr {% if a.reviewed %}class="text-muted"{% endif %}><td><a href="{% url 'sales:detail' a.sale_id %}">{{ a.sale.invoice_number }}</a></td><td>{{ a.sale.sale_date|date:"d M Y" }}</td><td class="text-end">{{ a.sale.total }}</td>
+      <td>{{ a.reasons|join:"; " }}</td><td>{% if not a.reviewed %}<form method="post" action="{% url 'ml:reviewed' a.pk %}">{% csrf_token %}<button class="btn btn-sm btn-outline-secondary py-0">Mark reviewed</button></form>{% else %}reviewed{% endif %}</td></tr>
+    {% empty %}<tr><td colspan="5" class="text-muted text-center py-3">Nothing unusual found.</td></tr>{% endfor %}</table></div></div>
+  {% endif %}
+</div>
+
+<div class="tab-pane fade" id="t-assoc">
+  {% if not assoc_version %}<div class="alert alert-info">Needs at least 30 completed sales.</div>
+  {% else %}
+  <div class="card p-3 mb-3 small">Confidence = of the sales containing A, the share that also contain B. Lift above 1 means the pair is bought together more often than chance.</div>
+  <div class="card"><div class="table-responsive"><table class="table table-sm mb-0"><thead class="table-light"><tr><th>When a customer buys</th><th>They often also buy</th><th class="text-end">Times together</th><th class="text-end">Confidence</th><th class="text-end">Lift</th></tr></thead>
+    {% for r in associations %}<tr><td>{{ r.product_a.name }}</td><td>{{ r.product_b.name }}</td><td class="text-end">{{ r.pair_count }}</td><td class="text-end">{{ r.confidence|floatformat:2 }}</td><td class="text-end">{{ r.lift|floatformat:1 }}</td></tr>
+    {% empty %}<tr><td colspan="5" class="text-muted text-center py-3">No strong pairs found yet.</td></tr>{% endfor %}</table></div></div>
+  {% endif %}
+</div>
+</div>
+{% endblock %}
+{% block scripts %}
+{% if sales_version %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+{{ sf_labels|json_script:"sf-labels" }}{{ sf_pred|json_script:"sf-pred" }}{{ sf_lo|json_script:"sf-lo" }}{{ sf_hi|json_script:"sf-hi" }}
+<script>
+const g = (id) => JSON.parse(document.getElementById(id).textContent);
+new Chart(document.getElementById('forecastChart'), {
+  type: 'line',
+  data: { labels: g('sf-labels'), datasets: [
+    { label: 'Upper range', data: g('sf-hi'), borderColor: 'rgba(13,110,253,.25)', pointRadius: 0, fill: false },
+    { label: 'Forecast', data: g('sf-pred'), borderColor: '#0d6efd', tension: .25 },
+    { label: 'Lower range', data: g('sf-lo'), borderColor: 'rgba(13,110,253,.25)', pointRadius: 0, fill: '-2', backgroundColor: 'rgba(13,110,253,.08)' } ] },
+  options: { scales: { y: { beginAtZero: true } } }
+});
+</script>
+{% endif %}
+{% endblock %}

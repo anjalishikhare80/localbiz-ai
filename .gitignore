@@ -1,0 +1,16 @@
+venv/
+__pycache__/
+*.pyc
+.env
+db.sqlite3
+media/
+media_test/
+staticfiles/
+ml_artifacts/
+ml_artifacts_test/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+.coverage
+htmlcov/

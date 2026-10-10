@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - LocalBiz AI{% endblock %}
+{% block content %}
+<h3 class="mb-3">{{ current_business.name }} <small class="text-muted fs-6">Dashboard</small></h3>
+{% if not k %}
+  <div class="card p-4"><h5>Welcome, {{ user.username }}</h5>
+    <p class="mb-3">Use the menu to record sales and look up products.</p>
+    {% if 'sales.create' in user_perms %}<a class="btn btn-primary" href="{% url 'sales:new' %}">New sale</a>{% endif %}</div>
+{% else %}
+<div class="row g-3 mb-3">
+  <div class="col-6 col-lg-3"><div class="card kpi-card p-3"><div class="text-muted small">Today's sales</div><div class="value">{{ k.today_sales|floatformat:2 }}</div><div class="small text-muted">{{ k.today_count }} transaction(s)</div></div></div>
+  <div class="col-6 col-lg-3"><div class="card kpi-card p-3"><div class="text-muted small">This month's sales</div><div class="value">{{ k.month_sales|floatformat:2 }}</div><div class="small text-muted">{{ k.month_count }} transaction(s)</div></div></div>
+  <div class="col-6 col-lg-3"><div class="card kpi-card p-3"><div class="text-muted small">Outstanding payments</div><div class="value">{{ k.outstanding|floatformat:2 }}</div><div class="small text-muted">owed by customers</div></div></div>
+  <div class="col-6 col-lg-3"><div class="card kpi-card p-3" style="border-left-color:#dc3545"><div class="text-muted small">Low-stock products</div><div class="value">{{ k.low_stock_count }}</div><a class="small" href="{% url 'catalog:product_list' %}?low=1">view</a></div></div>
+  {% if can_financial %}
+  <div class="col-6 col-lg-3"><div class="card kpi-card p-3" style="border-left-color:#198754"><div class="text-muted small">Est. net profit (month)</div><div class="value">{{ k.month_net_profit|floatformat:2 }}</div><div class="small text-muted">gross {{ k.month_gross_profit|floatformat:2 }} − expenses</div></div></div>
+  <div class="col-6 col-lg-3"><div class="card kpi-card p-3" style="border-left-color:#fd7e14"><div class="text-muted small">Expenses (month)</div><div class="value">{{ k.month_expenses|floatformat:2 }}</div></div></div>
+  <div class="col-6 col-lg-3"><div class="card kpi-card p-3" style="border-left-color:#6f42c1"><div class="text-muted small">Inventory value (at cost)</div><div class="value">{{ k.inventory_value|floatformat:2 }}</div></div></div>
+  {% endif %}
+</div>
+<div class="row g-3">
+  <div class="col-lg-8"><div class="card p-3"><h6>Sales – last 30 days</h6><canvas id="salesChart" height="110"></canvas></div></div>
+  <div class="col-lg-4"><div class="card p-3 h-100"><h6>Business insights</h6>
+    {% for i in insights %}<div class="alert alert-{{ i.severity }} py-2 small mb-2">{{ i.text }}</div>{% empty %}<p class="text-muted small">Insights appear once there is some sales history.</p>{% endfor %}
+  </div></div>
+  <div class="col-lg-4"><div class="card p-3"><h6>Top products this month</h6>
+    <table class="table table-sm mb-0"><thead><tr><th>Product</th><th class="text-end">Qty</th><th class="text-end">Revenue</th></tr></thead>
+    {% for p in k.top_products %}<tr><td>{{ p.product_name }}</td><td class="text-end">{{ p.qty }}</td><td class="text-end">{{ p.revenue|floatformat:2 }}</td></tr>{% empty %}<tr><td colspan="3" class="text-muted">No sales yet.</td></tr>{% endfor %}</table></div></div>
+  <div class="col-lg-4"><div class="card p-3"><h6>Low stock</h6>
+    <table class="table table-sm mb-0"><thead><tr><th>Product</th><th class="text-end">Stock</th><th class="text-end">Reorder at</th></tr></thead>
+    {% for p in k.low_stock %}<tr><td><a href="{% url 'catalog:product_detail' p.pk %}">{{ p.name }}</a></td><td class="text-end">{{ p.current_stock }}</td><td class="text-end">{{ p.reorder_level }}</td></tr>{% empty %}<tr><td colspan="3" class="text-muted">All good.</td></tr>{% endfor %}</table></div></div>
+  <div class="col-lg-4"><div class="card p-3"><h6>Recent transactions</h6>
+    <table class="table table-sm mb-0">
+    {% for s in k.recent_sales %}<tr><td><a href="{% url 'sales:detail' s.pk %}">{{ s.invoice_number }}</a></td><td>{% if s.customer %}{{ s.customer.name }}{% else %}Walk-in{% endif %}</td><td class="text-end">{{ s.total|floatformat:2 }}</td></tr>{% empty %}<tr><td class="text-muted">No sales yet.</td></tr>{% endfor %}</table></div></div>
+</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+{% if k %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+{{ chart_labels|json_script:"chart-labels" }}
+{{ chart_values|json_script:"chart-values" }}
+<script>
+new Chart(document.getElementById('salesChart'), {
+  type: 'line',
+  data: { labels: JSON.parse(document.getElementById('chart-labels').textContent),
+          datasets: [{ label: 'Sales', data: JSON.parse(document.getElementById('chart-values').textContent), borderColor: '#0d6efd', backgroundColor: 'rgba(13,110,253,.1)', fill: true, tension: .25, pointRadius: 0 }] },
+  options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+});
+</script>
+{% endif %}
+{% endblock %}

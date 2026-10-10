@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Record purchase{% endblock %}
+{% block content %}
+<h3 class="mb-3">Record purchase (stock in)</h3>
+{% csrf_token %}
+<div id="cart-app" data-mode="purchase" data-search-url="{% url 'catalog:product_search' %}" data-submit-url="{% url 'inventory:purchase_add' %}" class="row g-3">
+  <div class="col-lg-8"><div class="card p-3">
+    <input id="product-search" class="form-control" placeholder="Search product by name or SKU…" autocomplete="off" autofocus>
+    <div id="search-results" class="list-group mt-1"></div>
+    <div class="table-responsive mt-3"><table class="table table-sm align-middle">
+      <thead><tr><th>Product</th><th>Stock</th><th>Qty</th><th>Unit cost</th><th class="text-end">Amount</th><th></th></tr></thead>
+      <tbody id="cart-body"></tbody></table></div>
+  </div></div>
+  <div class="col-lg-4"><div class="card p-3">
+    <div class="mb-2"><label class="form-label">Supplier</label>
+      <select id="supplier" class="form-select">{% for s in suppliers %}<option value="{{ s.pk }}">{{ s.name }}</option>{% empty %}<option value="">Add a supplier first</option>{% endfor %}</select></div>
+    <div class="mb-2"><label class="form-label">Amount paid now</label><input id="paid-amount" type="number" step="0.01" min="0" value="0" class="form-control"></div>
+    <div class="mb-3"><label class="form-label">Note</label><input id="note" class="form-control" maxlength="255"></div>
+    <table class="table table-sm mb-3"><tr class="fw-bold fs-5"><td>Total</td><td id="t-total" class="text-end">0.00</td></tr></table>
+    <div id="cart-error" class="alert alert-danger d-none py-2"></div>
+    <button id="submit-cart" class="btn btn-primary w-100">Save purchase</button>
+  </div></div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{% static 'js/cart.js' %}"></script>{% endblock %}

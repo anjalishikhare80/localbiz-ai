@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}{{ product.name }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3"><h3 class="m-0">{{ product.name }} <small class="text-muted fs-6">{{ product.sku }}</small></h3>
+  <div>{% if can_manage %}<a class="btn btn-sm btn-outline-primary" href="{% url 'catalog:product_edit' product.pk %}">Edit</a>{% endif %}
+  <a class="btn btn-sm btn-outline-secondary" href="{% url 'catalog:product_list' %}">Back</a></div></div>
+<div class="row g-3">
+  <div class="col-lg-4"><div class="card p-3">
+    <dl class="row mb-0 small">
+      <dt class="col-6">Category</dt><dd class="col-6">{{ product.category.name|default:"—" }}</dd>
+      <dt class="col-6">Selling price</dt><dd class="col-6">{{ product.selling_price }}</dd>
+      {% if can_manage %}<dt class="col-6">Cost price</dt><dd class="col-6">{{ product.purchase_price }}</dd>
+      <dt class="col-6">Supplier</dt><dd class="col-6">{{ product.supplier.name|default:"—" }}</dd>{% endif %}
+      <dt class="col-6">In stock</dt><dd class="col-6"><b>{{ product.current_stock }}</b> {{ product.unit }}</dd>
+      <dt class="col-6">Reorder level</dt><dd class="col-6">{{ product.reorder_level }}</dd>
+      <dt class="col-6">Barcode</dt><dd class="col-6">{{ product.barcode|default:"—" }}</dd>
+    </dl></div>
+    {% if forecast %}<div class="card p-3 mt-3"><h6>Demand forecast (next {{ forecast.horizon_days }} days)</h6>
+      {% if forecast.status == 'INSUFFICIENT_DATA' %}<p class="small text-muted mb-0">Not enough sales history yet.</p>
+      {% else %}<p class="mb-1">Predicted demand: <b>{{ forecast.predicted_demand }}</b></p>
+      <p class="mb-0 small {% if forecast.status == 'SHORTAGE_RISK' %}text-danger{% else %}text-success{% endif %}">{{ forecast.get_status_display }}{% if forecast.suggested_reorder %} – consider ordering about {{ forecast.suggested_reorder }}{% endif %}</p>{% endif %}
+    </div>{% endif %}
+    {% if associations %}<div class="card p-3 mt-3"><h6>Frequently bought with</h6>
+      <ul class="small mb-0">{% for a in associations %}<li>{{ a.product_b.name }} <span class="text-muted">(lift {{ a.lift|floatformat:1 }})</span></li>{% endfor %}</ul></div>{% endif %}
+  </div>
+  <div class="col-lg-8">{% if ledger %}<div class="card p-3"><h6>Recent stock movements</h6>
+    <table class="table table-sm mb-0"><thead><tr><th>When</th><th>Type</th><th class="text-end">Change</th><th class="text-end">After</th><th>By</th></tr></thead>
+    {% for t in ledger %}<tr><td>{{ t.occurred_at|date:"d M Y H:i" }}</td><td>{{ t.get_txn_type_display }}</td><td class="text-end">{{ t.quantity_change }}</td><td class="text-end">{{ t.stock_after }}</td><td>{{ t.created_by.username|default:"" }}</td></tr>{% endfor %}</table></div>{% endif %}</div>
+</div>
+{% endblock %}
