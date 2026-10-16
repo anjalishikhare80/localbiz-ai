@@ -14,3 +14,5 @@ ml_artifacts_test/
 Thumbs.db
 .coverage
 htmlcov/
+docs/INTERVIEW_PREP.md
+docs/GIT_AND_RESUME.md
